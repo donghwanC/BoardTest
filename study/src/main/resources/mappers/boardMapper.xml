@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="boardMapper">
+
+<sql id="search">
+	<if test="searchType != null">
+		<if test="searchType == 't'.toString()">AND TITLE LIKE '%' || #{keyword} || '%'</if>
+		<if test="searchType == 'c'.toString()">AND CONTENT LIKE '%' || #{keyword} || '%'</if>
+		<if test="searchType == 'w'.toString()">AND WRITER LIKE '%' || #{keyword} || '%'</if>
+		<if test="searchType == 'tc'.toString()">AND (TITLE LIKE '%' || #{keyword} || '%') or (CONTENT LIKE
+			'%' || #{keyword} || '%')</if>
+	</if>
+</sql>
+
+<!-- 
+useGeneratedKeys는 자동적으로 증가되는 키를 받는 
+getGeneratedKeys()를 사용할 수 있게 true로 설정.
+
+keyProperty는 selectKey에 의해 선택된 키(keyProperty="bno")가 무엇인지 설정.
+
+order="BEFORE"는 insert를 실행하기전에 실행한다는 설정.
+
+
+그렇다면..
+
+1) insert쿼리를 실행기전에 
+SELECT MP_BOARD_SEQ.NEXTVAL FROM DUAL을 실행
+
+2) 실행한 쿼리에서 가져올값 (keyProperty="bno") 
+bno를 int형으로 가져옴
+
+3) <insert>안에 있는 keyProperty에 의해 
+<selectKey>에 있는 keyProperty값 bno를 가져옴
+
+4) bno값 파라미터로 넣어줌
+ -->
+ 
+<insert id="insert" parameterType="kr.co.vo.BoardVO" useGeneratedKeys="true" keyProperty="bno">
+<selectKey keyProperty="bno" resultType="int" order="BEFORE">
+	select MP_BOARD_SEQ.NEXTVAL from dual
+</selectKey>
+	INSERT INTO MP_BOARD( BNO
+						, TITLE
+						, CONTENT
+						, WRITER )
+				VALUES( #{bno}
+						, #{title}
+						, #{content}
+						, #{writer} )
+
+</insert>
+
+<!-- 
+파일첨부 업로드할 쿼리를 작성해 줍니다.
+
+게시판의 글을 등록하면 자동으로 
+시퀀스에의해 1씩 증가되게 만들었습니다. 
+
+그런데, 파일첨부가 생기고나서 파일첨부
+BNO컬럼에 증가된 BNO를 받을수가 없습니다.
+
+그래서 selectKey를 이용하여 따로 증가된 bno를 셋팅해주고 
+BoardServiceImpl에 게시글 작성쪽 메소드를 보면 
+게시글이 작성되고 나서 그 다음에 첨부파일이 되는 것을 보실수 있는데요.
+
+게시글이 작성되면 bno의 값은 1이 증가된 상태에서 
+첨부파일 업로드메소드에 증가된 bno를 넘겨주기 때문에
+
+같은 bno의 값을 가질 수 있게 됩니다.
+ -->
+<insert id="insertFile" parameterType="hashMap">
+	INSERT INTO MP_FILE( FILE_NO,
+						BNO,
+						ORG_FILE_NAME,
+						STORED_FILE_NAME,
+						FILE_SIZE)
+				VALUES( SEQ_MP_FILE_NO.NEXTVAL,
+						#{BNO},
+						#{ORG_FILE_NAME},
+						#{STORED_FILE_NAME},
+						#{FILE_SIZE})
+</insert>
+
+<!-- 첨부파일 조회 -->
+<select id="selectFileList" parameterType="int" resultType="hashMap">
+	SELECT FILE_NO,
+		   ORG_FILE_NAME,
+		   ROUND(FILE_SIZE/1024,1) AS FILE_SIZE
+	 FROM MP_FILE
+	 WHERE BNO = #{BNO}
+	 	AND DEL_GB = 'N'
+	 ORDER BY FILE_NO ASC  
+</select>
+
+	<!-- 첨부파일 다운로드 -->
+	<select id="selectFileInfo" parameterType="hashMap"
+		resultType="hashMap">
+		SELECT STORED_FILE_NAME,
+				ORG_FILE_NAME
+		FROM MP_FILE
+		WHERE FILE_NO = #{FILE_NO}
+	</select>
+
+
+	<!-- 첨부파일 삭제기능 -->
+	<update id="updateFile" parameterType="hashMap">
+		UPDATE MP_FILE SET
+		DEL_GB = 'Y'
+		WHERE FILE_NO = #{FILE_NO}
+	</update>
+    
+    
+<select id="listPage" resultType="kr.co.vo.BoardVO"
+	parameterType="kr.co.vo.SearchCriteria">
+	SELECT BNO,
+			TITLE,
+			CONTENT,
+			WRITER,
+			REGDATE,
+			HIT
+	FROM (
+			SELECT BNO,
+			TITLE,
+			CONTENT,
+			WRITER,
+			REGDATE,
+			HIT,
+			ROW_NUMBER() OVER(ORDER BY BNO DESC) AS RNUM
+		FROM MP_BOARD
+		WHERE 1=1
+		<include refid="search"></include>
+	) MP
+	
+	WHERE RNUM BETWEEN #{rowStart} AND #{rowEnd}
+	ORDER BY BNO DESC
+</select>
+
+	<select id="listCount" parameterType="kr.co.vo.SearchCriteria" resultType="int">
+		SELECT COUNT(BNO)
+		   FROM MP_BOARD
+		   WHERE 1=1
+			<include refid="search"></include>	
+		   AND BNO > 0
+	</select>
+
+	<select id="list" resultType="kr.co.vo.BoardVO">
+		SELECT BNO
+		, TITLE
+		, WRITER
+		, REGDATE
+		FROM MP_BOARD
+		ORDER BY BNO DESC
+	</select>
+
+	<select id="read" parameterType="int"
+		resultType="kr.co.vo.BoardVO">
+		SELECT BNO
+		, TITLE
+		, CONTENT
+		, WRITER
+		, REGDATE
+		FROM MP_BOARD
+		WHERE BNO = #{bno}
+	</select>
+
+	<update id="update" parameterType="kr.co.vo.BoardVO">
+		UPDATE MP_BOARD
+		SET TITLE = #{title},
+		CONTENT = #{content},
+		REGDATE = SYSDATE
+		WHERE BNO = #{bno}
+	</update>
+
+	<delete id="delete" parameterType="int">
+		DELETE
+		FROM MP_BOARD
+		WHERE BNO = #{bno}
+	</delete>
+
+	<update id="boardHit" parameterType="int">
+		UPDATE MP_BOARD SET
+    	HIT = HIT+1
+    	WHERE BNO = #{bno}
+	</update>
+</mapper>

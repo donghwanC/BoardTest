@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="replyMapper">
+
+	<select id="readReply" resultType="kr.co.vo.ReplyVO">
+		select rno, content, writer, regdate
+		from mp_reply
+		where bno = #{bno}
+	</select>
+
+	<insert id="writeReply" parameterType="kr.co.vo.ReplyVO">
+		insert into mp_reply(bno, rno, content, writer)
+		values(#{bno}, mp_reply_seq.nextval, #{content}, #{writer})
+	</insert>
+	
+	<update id="updateReply" parameterType="kr.co.vo.ReplyVO">
+		update mp_reply
+		set content = #{content}
+		where rno = #{rno}
+	</update>
+	
+	<delete id="deleteReply" parameterType="kr.co.vo.ReplyVO">
+		delete from mp_reply
+		where rno = #{rno}
+	</delete>
+	
+	<select id="selectReply" resultType="kr.co.vo.ReplyVO">
+		select bno, rno, content, writer, regdate
+		from mp_reply
+		where rno = #{rno}
+	</select>
+</mapper>
